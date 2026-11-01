@@ -2,9 +2,9 @@ import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import Demo from "@/components/Demo";
 import Dashboard from "@/components/Dashboard";
+import InsideTheCNN from "@/components/InsideTheCNN";
 import CodeSection from "@/components/CodeSection";
 import Concepts from "@/components/Concepts";
-import RunLocally from "@/components/RunLocally";
 import Footer from "@/components/Footer";
 import { ModelProvider } from "@/lib/model";
 
@@ -17,9 +17,9 @@ export default function App() {
           <Hero />
           <Demo />
           <Dashboard />
+          <InsideTheCNN />
           <CodeSection />
           <Concepts />
-          <RunLocally />
         </main>
         <Footer />
       </div>

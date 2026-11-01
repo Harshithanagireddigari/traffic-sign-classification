@@ -17,7 +17,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import * as tf from "@tensorflow/tfjs";
-import { CLASS_NAMES, generateDataset, IMG } from "./gtsrb";
+import { CLASS_NAMES, generateDataset, IMG, renderSample } from "./gtsrb";
+import {
+  extractFeatureMaps,
+  generateGradCam,
+  type GradCamResult,
+  type LayerFeatureMaps,
+} from "./cnnExplainability";
+import { SIGN_METADATA, type SignClassInfo } from "./signMetadata";
 
 export const TOTAL_EPOCHS = 16;
 export const TRAIN_PER_CLASS = 34;
@@ -60,6 +67,10 @@ export interface Prediction {
   confidence: number;
   top3: Array<{ classId: number; name: string; confidence: number }>;
   stages: StageImages;
+  modelSource?: string;
+  gradCam?: GradCamResult | null;
+  featureMaps?: LayerFeatureMaps[];
+  metadata?: SignClassInfo;
 }
 
 export type Phase = "idle" | "preparing" | "training" | "ready" | "error";
@@ -68,11 +79,15 @@ interface ModelContextValue {
   phase: Phase;
   epoch: number;
   totalEpochs: number;
+  trainPerClass: number;
+  valPerClass: number;
   history: HistoryPoint[];
   evalData: EvalData | null;
   error: string | null;
   ready: boolean;
+  lastPrediction: Prediction | null;
   predict: (file: File) => Promise<Prediction>;
+  explainSampleSign: (classId: number) => Promise<Prediction>;
   retrain: () => void;
 }
 
@@ -100,6 +115,7 @@ function buildCnn(): tf.LayersModel {
   const model = tf.sequential();
   model.add(
     tf.layers.conv2d({
+      name: "conv1",
       inputShape: [IMG, IMG, 3],
       filters: 32,
       kernelSize: 3,
@@ -107,15 +123,15 @@ function buildCnn(): tf.LayersModel {
       padding: "same",
     }),
   );
-  model.add(tf.layers.maxPooling2d({ poolSize: 2 }));
-  model.add(tf.layers.conv2d({ filters: 64, kernelSize: 3, activation: "relu", padding: "same" }));
-  model.add(tf.layers.maxPooling2d({ poolSize: 2 }));
-  model.add(tf.layers.conv2d({ filters: 128, kernelSize: 3, activation: "relu", padding: "same" }));
-  model.add(tf.layers.maxPooling2d({ poolSize: 2 }));
-  model.add(tf.layers.flatten());
-  model.add(tf.layers.dense({ units: 256, activation: "relu" }));
-  model.add(tf.layers.dropout({ rate: 0.5 }));
-  model.add(tf.layers.dense({ units: CLASS_NAMES.length, activation: "softmax" }));
+  model.add(tf.layers.maxPooling2d({ name: "pool1", poolSize: 2 }));
+  model.add(tf.layers.conv2d({ name: "conv2", filters: 64, kernelSize: 3, activation: "relu", padding: "same" }));
+  model.add(tf.layers.maxPooling2d({ name: "pool2", poolSize: 2 }));
+  model.add(tf.layers.conv2d({ name: "conv3", filters: 128, kernelSize: 3, activation: "relu", padding: "same" }));
+  model.add(tf.layers.maxPooling2d({ name: "pool3", poolSize: 2 }));
+  model.add(tf.layers.flatten({ name: "flatten" }));
+  model.add(tf.layers.dense({ name: "dense1", units: 256, activation: "relu" }));
+  model.add(tf.layers.dropout({ name: "dropout", rate: 0.5 }));
+  model.add(tf.layers.dense({ name: "output", units: CLASS_NAMES.length, activation: "softmax" }));
   model.compile({
     optimizer: tf.train.adam(0.001),
     loss: "sparseCategoricalCrossentropy",
@@ -130,6 +146,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [evalData, setEvalData] = useState<EvalData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastPrediction, setLastPrediction] = useState<Prediction | null>(null);
 
   const modelRef = useRef<tf.LayersModel | null>(null);
   const runningRef = useRef(false);
@@ -261,8 +278,72 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     if (runningRef.current) return;
     modelRef.current?.dispose();
     modelRef.current = null;
+    setLastPrediction(null);
     void train();
   }, [train]);
+
+  const explainSampleSign = useCallback(async (classId: number): Promise<Prediction> => {
+    const model = modelRef.current;
+    if (!model || phase !== "ready") throw new Error("The CNN is still training — please wait until it finishes.");
+
+    const raw = renderSample(classId); // Float32Array [32*32*3]
+    const c32 = document.createElement("canvas");
+    c32.width = c32.height = IMG;
+    const cctx = c32.getContext("2d")!;
+    const idata = cctx.createImageData(IMG, IMG);
+    let sum = 0;
+    for (let p = 0; p < IMG * IMG; p++) {
+      for (let ch = 0; ch < 3; ch++) {
+        const v = raw[p * 3 + ch];
+        idata.data[p * 4 + ch] = Math.round(v * 255);
+        sum += v;
+      }
+      idata.data[p * 4 + 3] = 255;
+    }
+    cctx.putImageData(idata, 0, 0);
+
+    const up = (src: HTMLCanvasElement) => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 160;
+      const x = c.getContext("2d")!;
+      x.imageSmoothingEnabled = false;
+      x.drawImage(src, 0, 0, 160, 160);
+      return c.toDataURL("image/png");
+    };
+
+    const input = tf.tensor4d(raw, [1, IMG, IMG, 3], "float32");
+    const probsT = model.predict(input) as tf.Tensor2D;
+    const probs = Array.from(await probsT.data());
+    probsT.dispose();
+
+    const order = probs.map((v, i) => [v, i] as [number, number]).sort((a, b) => b[0] - a[0]);
+    const top3 = order.slice(0, 3).map(([v, i]) => ({ classId: i, name: CLASS_NAMES[i], confidence: v }));
+    const best = top3[0];
+
+    const gradCam = await generateGradCam(model, input, best.classId, c32);
+    const featureMaps = await extractFeatureMaps(model, input, 12);
+    input.dispose();
+
+    const sampleUrl = up(c32);
+    const result: Prediction = {
+      classId: best.classId,
+      name: best.name,
+      confidence: best.confidence,
+      top3,
+      stages: {
+        original: sampleUrl,
+        resized: sampleUrl,
+        normalized: sampleUrl,
+        mean: sum / raw.length,
+      },
+      modelSource: "Browser CNN (interactive demo)",
+      gradCam,
+      featureMaps,
+      metadata: SIGN_METADATA[best.classId],
+    };
+    setLastPrediction(result);
+    return result;
+  }, [phase]);
 
   const predict = useCallback(async (file: File): Promise<Prediction> => {
     const model = modelRef.current;
@@ -318,11 +399,50 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     }
     nctx.putImageData(idata, 0, 0);
 
+    // ---- Optional: Check for connected Python FastAPI backend (Render / Local) ----
+    const apiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "");
+    if (apiUrl) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(`${apiUrl}/api/predict`, {
+          method: "POST",
+          body: formData,
+        });
+        if (res.ok) {
+          const apiData = (await res.json()) as {
+            classId: number;
+            name: string;
+            confidence: number;
+            top3: Array<{ classId: number; name: string; confidence: number }>;
+            modelSource?: string;
+          };
+          const resObj: Prediction = {
+            classId: apiData.classId,
+            name: apiData.name,
+            confidence: apiData.confidence,
+            top3: apiData.top3,
+            stages: {
+              original: url,
+              resized: up(c32),
+              normalized: up(normCanvas),
+              mean,
+            },
+            modelSource: apiData.modelSource ?? "Python TensorFlow (GTSRB trained)",
+            metadata: SIGN_METADATA[apiData.classId],
+          };
+          setLastPrediction(resObj);
+          return resObj;
+        }
+      } catch (err) {
+        console.warn("Backend API request failed, using in-browser CNN:", err);
+      }
+    }
+
     // ---- run the CNN ----
     const input = tf.tensor4d(arr, [1, IMG, IMG, 3], "float32");
     const probsT = model.predict(input) as tf.Tensor2D;
     const probs = Array.from(await probsT.data());
-    input.dispose();
     probsT.dispose();
     // NOTE: `url` is intentionally kept alive — it is returned as stages.original.
 
@@ -330,7 +450,12 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     const top3 = order.slice(0, 3).map(([v, i]) => ({ classId: i, name: CLASS_NAMES[i], confidence: v }));
     const best = top3[0];
 
-    return {
+    // Compute genuine Grad-CAM and intermediate feature maps
+    const gradCam = await generateGradCam(model, input, best.classId, c32);
+    const featureMaps = await extractFeatureMaps(model, input, 12);
+    input.dispose();
+
+    const result: Prediction = {
       classId: best.classId,
       name: best.name,
       confidence: best.confidence,
@@ -341,7 +466,13 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         normalized: up(normCanvas),
         mean,
       },
+      modelSource: "Browser CNN (interactive demo)",
+      gradCam,
+      featureMaps,
+      metadata: SIGN_METADATA[best.classId],
     };
+    setLastPrediction(result);
+    return result;
   }, [phase]);
 
   return (
@@ -350,11 +481,15 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         phase,
         epoch,
         totalEpochs: TOTAL_EPOCHS,
+        trainPerClass: TRAIN_PER_CLASS,
+        valPerClass: VAL_PER_CLASS,
         history,
         evalData,
         error,
         ready: phase === "ready",
+        lastPrediction,
         predict,
+        explainSampleSign,
         retrain,
       }}
     >

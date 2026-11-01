@@ -177,7 +177,14 @@ export default function Demo() {
                   className="h-20 w-20 rounded-lg border border-slate-700 bg-slate-100 object-contain"
                 />
                 <div>
-                  <Badge tone="teal">predicted class [{String(result.classId).padStart(2, "0")}]</Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="teal">predicted class [{String(result.classId).padStart(2, "0")}]</Badge>
+                    {result.modelSource && (
+                      <span className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900/90 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+                        ⚡ {result.modelSource}
+                      </span>
+                    )}
+                  </div>
                   <h4 className="mt-1.5 text-xl font-extrabold text-white">{result.name}</h4>
                   <p className="text-sm font-bold text-teal-300">confidence { (result.confidence * 100).toFixed(2) }%</p>
                 </div>
@@ -201,6 +208,48 @@ export default function Demo() {
                   </div>
                 ))}
               </div>
+              {/* ----------------- Short explanation of predicted class ----------------- */}
+              {result.metadata && (
+                <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300">
+                  <div className="flex items-center gap-2 font-bold text-teal-300">
+                    <span>💡 Sign Category: {result.metadata.category}</span>
+                  </div>
+                  <p className="mt-1 leading-relaxed text-slate-400">{result.metadata.description}</p>
+                  <p className="mt-1 font-mono text-[10px] text-slate-500">Key visual markers: {result.metadata.visualFeatures}</p>
+                </div>
+              )}
+
+              {/* ----------------- Grad-CAM explainability ----------------- */}
+              {result.gradCam && (
+                <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/70 p-3.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-200">🔍 Grad-CAM Attention Heatmap</span>
+                    <a href="#inside-cnn" className="text-[11px] font-semibold text-teal-400 hover:underline">
+                      Explore all layers ↓
+                    </a>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                    Highlights which spatial regions most strongly influenced the CNN's prediction of this sign.
+                  </p>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
+                    <div>
+                      <img src={result.stages.resized} alt="32x32 input" className="mx-auto h-20 w-20 rounded-md border border-slate-800 [image-rendering:pixelated]" />
+                      <span className="mt-1 block text-slate-400">Input (32×32)</span>
+                    </div>
+                    <div>
+                      <img src={result.gradCam.heatmapUrl} alt="Grad-CAM Heatmap" className="mx-auto h-20 w-20 rounded-md border border-slate-800" />
+                      <span className="mt-1 block text-teal-400">Grad-CAM Heatmap</span>
+                    </div>
+                    <div>
+                      <img src={result.gradCam.overlayUrl} alt="Grad-CAM Overlay" className="mx-auto h-20 w-20 rounded-md border border-slate-800" />
+                      <span className="mt-1 block text-emerald-400">Attention Overlay</span>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] italic text-slate-500">
+                    *Grad-CAM highlights influential feature map activations at layer conv3; it visualizes network sensitivity, not human reasoning.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </Card>

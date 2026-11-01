@@ -31,3 +31,8 @@ venv/
 
 .vscode/
 .DS_Store
+
+
+# Large datasets
+Traffic-Sign-Classification/dataset/GTSRB/
+*.zip

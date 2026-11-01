@@ -12,5 +12,8 @@ matplotlib>=3.8
 seaborn>=0.13
 scikit-learn>=1.4            # train/validation split, confusion matrix, report
 
-# Frontend
-streamlit>=1.35              # web UI for the project
+# Frontend & API
+streamlit>=1.35              # Streamlit demo
+fastapi>=0.110.0             # FastAPI REST backend
+uvicorn>=0.28.0              # ASGI web server
+python-multipart>=0.0.9      # multipart form-data for image uploads

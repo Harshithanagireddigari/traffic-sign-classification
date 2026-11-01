@@ -5,9 +5,9 @@ const LINKS = [
   { href: "#overview", label: "Overview" },
   { href: "#demo", label: "Live Demo" },
   { href: "#dashboard", label: "Dashboard" },
+  { href: "#inside-cnn", label: "Inside the CNN" },
   { href: "#code", label: "Source Code" },
   { href: "#concepts", label: "ML Concepts" },
-  { href: "#run", label: "Run Locally" },
 ];
 
 function statusPill(phase: string, epoch: number, total: number, error: string | null) {

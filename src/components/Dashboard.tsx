@@ -19,6 +19,13 @@ export default function Dashboard() {
       />
 
       <div className="mx-auto mt-10 max-w-6xl space-y-6 px-6">
+        {/* Model Distinction Callout */}
+        <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-4 text-xs leading-relaxed text-slate-300">
+          <p>
+            <strong className="text-teal-300">📌 Academic Evaluation Note:</strong> The metrics displayed in this live dashboard (validation accuracy, loss curves, confusion matrix) reflect the <strong>in-browser interactive training run</strong> on procedurally rendered signs. Once your Python CNN is trained on the full, official <strong>GTSRB dataset</strong> (~39,000 real images), its standalone benchmark test results (~95–98%) are evaluated and saved separately to <code className="font-mono text-teal-300">Traffic-Sign-Classification/models/evaluation.json</code>.
+          </p>
+        </div>
+
         {/* status bar */}
         <Card className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
