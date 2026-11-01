@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-slate-950 text-slate-200 antialiased;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: rgba(45, 212, 191, 0.35);
+  color: #f0fdfa;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* animated traffic light in the hero */
+@keyframes trafficCycle {
+  0%, 32% { opacity: 1; }
+  33%, 65% { opacity: 0.12; }
+  66%, 100% { opacity: 0.12; }
+}
+@keyframes trafficCycleAmber {
+  0%, 32% { opacity: 0.12; }
+  33%, 65% { opacity: 1; }
+  66%, 100% { opacity: 0.12; }
+}
+@keyframes trafficCycleGreen {
+  0%, 65% { opacity: 0.12; }
+  66%, 100% { opacity: 1; }
+}
+.tl-red { animation: trafficCycle 3s infinite; }
+.tl-amber { animation: trafficCycleAmber 3s infinite; }
+.tl-green { animation: trafficCycleGreen 3s infinite; }
+
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.animate-float { animation: floatY 5s ease-in-out infinite; }
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+.pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }

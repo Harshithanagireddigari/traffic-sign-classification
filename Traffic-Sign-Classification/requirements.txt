@@ -1,0 +1,16 @@
+# Core deep-learning stack
+tensorflow>=2.16,<3.0        # TensorFlow + Keras (CNN model)
+
+# Image processing & data handling
+opencv-python>=4.8           # OpenCV: reading / resizing images
+numpy>=1.26                  # NumPy arrays
+pandas>=2.0                  # reading the GTSRB CSV files
+Pillow>=10.0                 # image loading for Streamlit uploads
+
+# Visualisation & evaluation
+matplotlib>=3.8
+seaborn>=0.13
+scikit-learn>=1.4            # train/validation split, confusion matrix, report
+
+# Frontend
+streamlit>=1.35              # web UI for the project
